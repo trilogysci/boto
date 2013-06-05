@@ -339,6 +339,7 @@ class QuerySignatureV2AuthHandler(QuerySignatureHelper, AuthHandler):
                   'sdb', 'iam', 'rds', 'sns', 'sqs', 'cloudformation']
 
     def _calc_signature(self, params, verb, path, server_name):
+        #assert False, "_calc_signature %s %s %s %s" % (params, verb, path, server_name) #debugging
         boto.log.debug('using _calc_signature_2')
         string_to_sign = '%s\n%s\n%s\n' % (verb, server_name.lower(), path)
         if self._hmac_256:

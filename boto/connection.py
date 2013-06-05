@@ -127,7 +127,7 @@ class HostConnectionPool(object):
         ready to be returned by get().
         """
         return len(self.queue)
-    
+
     def put(self, conn):
         """
         Adds a connection to the pool, along with the time it was
@@ -209,7 +209,7 @@ class ConnectionPool(object):
     #
     # The amout of time between calls to clean.
     #
-    
+
     CLEAN_INTERVAL = 5.0
 
     #
@@ -239,7 +239,7 @@ class ConnectionPool(object):
         """
         return sum(pool.size() for pool in self.host_to_pool.values())
 
-    def get_http_connection(self, host, is_secure):
+    def get_http_connection(self, host, is_secure, port=None): # dynamo_mock port selection
         """
         Gets a connection from the pool for the named host.  Returns
         None if there is no connection that can be reused. It's the caller's
@@ -270,7 +270,7 @@ class ConnectionPool(object):
         get rid of empty pools.  Pools clean themselves every time a
         connection is fetched; this cleaning takes care of pools that
         aren't being used any more, so nothing is being gotten from
-        them. 
+        them.
         """
         with self.mutex:
             now = time.time()
@@ -539,7 +539,10 @@ class AWSAuthConnection(object):
             port = self.port
         if port == 80:
             signature_host = self.host
-        else:
+        elif self.host == 'localhost' and port != 443:
+            #appending port causes issues in 2.7 atleast for localhost
+            signature_host = self.host
+        elif port :
             # This unfortunate little hack can be attributed to
             # a difference in the 2.6 version of httplib.  In old
             # versions, it would append ":443" to the hostname sent
@@ -589,7 +592,7 @@ class AWSAuthConnection(object):
         self.use_proxy = (self.proxy != None)
 
     def get_http_connection(self, host, is_secure):
-        conn = self._pool.get_http_connection(host, is_secure)
+        conn = self._pool.get_http_connection(host, is_secure, self.port) # port selection dynamo_mock
         if conn is not None:
             return conn
         else:
@@ -613,12 +616,12 @@ class AWSAuthConnection(object):
                         host, ca_certs=self.ca_certificates_file,
                         **self.http_connection_kwargs)
             else:
-                connection = httplib.HTTPSConnection(host,
+                connection = httplib.HTTPSConnection(host,port=self.port, # dynamo_mock added port selection
                         **self.http_connection_kwargs)
         else:
             boto.log.debug('establishing HTTP connection: kwargs=%s' %
                     self.http_connection_kwargs)
-            connection = httplib.HTTPConnection(host,
+            connection = httplib.HTTPConnection(host,port=self.port, # dynamo_mock added port selection
                     **self.http_connection_kwargs)
         if self.debug > 1:
             connection.set_debuglevel(self.debug)
@@ -720,6 +723,8 @@ class AWSAuthConnection(object):
         else:
             num_retries = override_num_retries
         i = 0
+        #debugging
+        assert ':' not in request.host, 'bad host %s' % request.host
         connection = self.get_http_connection(request.host, self.is_secure)
         while i <= num_retries:
             # Use binary exponential backoff to desynchronize client requests
@@ -809,7 +814,9 @@ class AWSAuthConnection(object):
             headers = {}
         else:
             headers = headers.copy()
+        hosta=host
         host = host or self.host
+        assert ':' not in host, 'host %s self.host %s' % (hosta,host)
         if self.use_proxy:
             if not auth_path:
                 auth_path = path
@@ -818,6 +825,10 @@ class AWSAuthConnection(object):
                 # If is_secure, we don't have to set the proxy authentication
                 # header here, we did that in the CONNECT to the proxy.
                 headers.update(self.get_proxy_auth_header())
+        # debugging dynamo_mock
+        assert self.protocol == 'http'
+        assert host.startswith('localhost'), 'host %s' % host
+        assert self.port == 4567, 'port %s' % self.port
         return HTTPRequest(method, self.protocol, host, self.port,
                            path, auth_path, params, headers, data)
 

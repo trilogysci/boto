@@ -15,7 +15,7 @@
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 # OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABIL-
 # ITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-# SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
+# SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 # WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
@@ -54,13 +54,13 @@ class Layer1(AWSAuthConnection):
         keeps a running total of the number of ThroughputExceeded
         responses this connection has received from Amazon DynamoDB.
     """
-    
+
     DefaultRegionName = 'us-east-1'
     """The default region name for DynamoDB API."""
 
     ServiceName = 'DynamoDB'
     """The name of the Service"""
-    
+
     Version = '20111205'
     """DynamoDB API version."""
 
@@ -69,7 +69,7 @@ class Layer1(AWSAuthConnection):
 
     SessionExpiredError = 'com.amazon.coral.service#ExpiredTokenException'
     """The error response returned when session token has expired"""
-    
+
     ResponseError = DynamoDBResponseError
 
     def __init__(self, aws_access_key_id=None, aws_secret_access_key=None,
@@ -84,6 +84,8 @@ class Layer1(AWSAuthConnection):
                     break
 
         self.region = region
+        self.port = port # set port prior to _get_session_token
+        self.is_secure = is_secure # set is_secure prior to _get_session_token
         self._passed_access_key = aws_access_key_id
         self._passed_secret_key = aws_secret_access_key
         if not session_token:
@@ -106,11 +108,15 @@ class Layer1(AWSAuthConnection):
                                  self.creds.secret_key,
                                  self.creds.session_token)
         self._auth_handler.update_provider(self.provider)
-        
+
     def _get_session_token(self):
         boto.log.debug('Creating new Session Token')
         sts = boto.connect_sts(self._passed_access_key,
-                               self._passed_secret_key)
+                               self._passed_secret_key,
+                               port=self.port, #added port selection for dynamo-mock
+                               region=self.region, #added to support dynamo-mock
+                               is_secure=self.is_secure, #added for dynamo-mock
+                               )
         return sts.get_session_token()
 
     def _required_auth_capability(self):
@@ -215,7 +221,7 @@ class Layer1(AWSAuthConnection):
 
         :type table_name: str
         :param table_name: The name of the table to create.
-        
+
         :type schema: dict
         :param schema: A Python version of the KeySchema data structure
             as defined by DynamoDB
@@ -224,7 +230,7 @@ class Layer1(AWSAuthConnection):
         :param provisioned_throughput: A Python version of the
             ProvisionedThroughput data structure defined by
             DynamoDB.
-        
+
         """
         data = {'TableName' : table_name,
                 'KeySchema' : schema,
@@ -236,10 +242,10 @@ class Layer1(AWSAuthConnection):
     def update_table(self, table_name, provisioned_throughput):
         """
         Updates the provisioned throughput for a given table.
-        
+
         :type table_name: str
         :param table_name: The name of the table to update.
-        
+
         :type provisioned_throughput: dict
         :param provisioned_throughput: A Python version of the
             ProvisionedThroughput data structure defined by
@@ -300,7 +306,7 @@ class Layer1(AWSAuthConnection):
                 "Key does not exist."
             )
         return response
-        
+
     def batch_get_item(self, request_items, object_hook=None):
         """
         Return a set of attributes for a multiple items in
@@ -540,5 +546,3 @@ class Layer1(AWSAuthConnection):
             data['ExclusiveStartKey'] = exclusive_start_key
         json_input = json.dumps(data)
         return self.make_request('Scan', json_input, object_hook=object_hook)
-
-    
